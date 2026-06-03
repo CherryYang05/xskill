@@ -1,0 +1,67 @@
+# Scheduled "query current time" task — keeps a Claude usage window warm.
+#
+# Goal: let Claude actually run a tiny task at fixed Beijing-time slots so it
+# consumes a few tokens / refreshes the rolling usage window.
+#
+# GitHub cron runs in UTC, so Beijing (UTC+8) slots are converted below:
+#
+#   Beijing 06:00 -> UTC 22:00 (previous day)
+#   Beijing 11:00 -> UTC 03:00
+#   Beijing 16:00 -> UTC 08:00
+#   Beijing 21:00 -> UTC 13:00
+#
+# Credentials: set ONE of these repo secrets (Settings → Secrets → Actions):
+#   - CLAUDE_CODE_OAUTH_TOKEN  (recommended for subscription window refresh;
+#                               generate locally with `claude setup-token`)
+#   - ANTHROPIC_API_KEY        (pay-as-you-go API key)
+# If neither is present the run skips gracefully instead of failing.
+
+name: Scheduled Time Query
+
+on:
+  workflow_dispatch:        # allow manual runs for testing
+  schedule:
+    - cron: '0 22 * * *'    # Beijing 06:00
+    - cron: '0 3 * * *'     # Beijing 11:00
+    - cron: '0 8 * * *'     # Beijing 16:00
+    - cron: '0 13 * * *'    # Beijing 21:00
+
+concurrency:
+  group: scheduled-time-query
+  cancel-in-progress: false
+
+jobs:
+  query-time:
+    name: Claude queries current time
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Claude credential presence
+        id: cred
+        env:
+          OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          APIKEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "${OAUTH:-}" ] || [ -n "${APIKEY:-}" ]; then
+            echo "have=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=0" >> "$GITHUB_OUTPUT"
+            echo "::warning::No CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY secret — scheduled time query skipped"
+          fi
+
+      - name: Checkout
+        if: steps.cred.outputs.have == '1'
+        uses: actions/checkout@v4
+
+      - name: Run Claude — query current time
+        if: steps.cred.outputs.have == '1'
+        uses: anthropics/claude-code-base-action@beta
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            查询当前时间：运行 `date` 命令，告诉我现在的日期和时间（包含时区）。
+          allowed_tools: "Bash(date)"
+
+      - name: Graceful skip notice
+        if: steps.cred.outputs.have != '1'
+        run: echo "No Claude credential secret — scheduled time query skipped (no failure)."
