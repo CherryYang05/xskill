@@ -1,0 +1,14 @@
+# xskill scheduled "query current time" task.
+#
+# Times below are UTC (the container clock is UTC). The comments show the
+# equivalent Beijing time (UTC+8) you actually asked for.
+#
+# Install with:   crontab scripts/query_time.crontab
+# Inspect with:   crontab -l
+# Logs:           ~/.xskill-cron/query_time.log
+#
+# m h dom mon dow  command
+0 22 * * *  /home/user/xskill/scripts/query_time.sh   # Beijing 06:00
+0 3  * * *  /home/user/xskill/scripts/query_time.sh   # Beijing 11:00
+0 8  * * *  /home/user/xskill/scripts/query_time.sh   # Beijing 16:00
+0 13 * * *  /home/user/xskill/scripts/query_time.sh   # Beijing 21:00
